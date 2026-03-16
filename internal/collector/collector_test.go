@@ -1,6 +1,8 @@
 package collector
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"testing"
 )
@@ -69,5 +71,58 @@ func TestParseMetrics_InvalidJSON(t *testing.T) {
 	_, err := ParseMetrics([]byte(`not json`))
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
+	}
+}
+
+func TestCollect_Success(t *testing.T) {
+	fixture, err := os.ReadFile("../../testdata/metrics_output.json")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+
+	mock := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name != "blockhost-vm-metrics" {
+			t.Errorf("command = %q, want %q", name, "blockhost-vm-metrics")
+		}
+		if len(args) != 1 || args[0] != "web1" {
+			t.Errorf("args = %v, want [web1]", args)
+		}
+		return fixture, nil
+	}
+
+	c := New("blockhost-vm-metrics", mock)
+	m, dur, err := c.Collect(context.Background(), "web1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if m.CPUPercent != 45.2 {
+		t.Errorf("cpu_percent = %f, want 45.2", m.CPUPercent)
+	}
+	if dur < 0 {
+		t.Errorf("duration should be non-negative, got %v", dur)
+	}
+}
+
+func TestCollect_CommandError(t *testing.T) {
+	mock := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return nil, fmt.Errorf("command failed")
+	}
+
+	c := New("blockhost-vm-metrics", mock)
+	_, _, err := c.Collect(context.Background(), "web1")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestCollect_BadJSON(t *testing.T) {
+	mock := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return []byte(`not json`), nil
+	}
+
+	c := New("blockhost-vm-metrics", mock)
+	_, _, err := c.Collect(context.Background(), "web1")
+	if err == nil {
+		t.Fatal("expected error")
 	}
 }
