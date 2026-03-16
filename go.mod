@@ -2,4 +2,4 @@ module github.com/mwaddip/blockhost-monitor
 
 go 1.23.8
 
-require gopkg.in/yaml.v3 v3.0.1 // indirect
+require gopkg.in/yaml.v3 v3.0.1

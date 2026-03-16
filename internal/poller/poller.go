@@ -97,10 +97,12 @@ func (p *Poller) Run(ctx context.Context) error {
 			sleep = 0
 		}
 
+		timer := time.NewTimer(sleep)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return ctx.Err()
-		case <-time.After(sleep):
+		case <-timer.C:
 		}
 	}
 }
