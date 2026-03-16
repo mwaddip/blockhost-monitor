@@ -1,6 +1,6 @@
 # Design Context — blockhost-monitor
 
-> Captured from the initial design conversation. This is the starting point, not a spec.
+> Captured from design conversations. This is the starting point, not a spec.
 
 ## What this component is
 
@@ -67,36 +67,69 @@ Never jump to the nuclear option. Escalation path:
 
 Thresholds and timing for each escalation step are policy-defined, configurable per plan.
 
-## Provisioner interface requirements
+## Provisioner interface (IMPLEMENTED)
 
-Two new commands needed in the provisioner contract:
+Both provisioners (libvirt and Proxmox) now implement the full metrics and throttle contracts. The specs are in `facts/PROVISIONER_INTERFACE.md` sections 2.12 and 2.13.
 
 ### `blockhost-vm-metrics <vm-name>`
-Returns standardized JSON:
-```json
-{
-  "cpu_percent": 45.2,
-  "memory_used_mb": 1824,
-  "memory_total_mb": 4096,
-  "disk_used_mb": 12400,
-  "disk_total_mb": 51200,
-  "disk_read_iops": 150,
-  "disk_write_iops": 42,
-  "net_rx_bytes_sec": 1048576,
-  "net_tx_bytes_sec": 524288,
-  "net_connections": 847,
-  "guest_agent_responsive": true
-}
-```
+Returns standardized JSON with all fields defined in the contract:
+- CPU: `cpu_percent`, `cpu_count`
+- Memory: `memory_used_mb`, `memory_total_mb`
+- Disk: `disk_used_mb`, `disk_total_mb`, `disk_read_iops`, `disk_write_iops`, `disk_read_bytes_sec`, `disk_write_bytes_sec`
+- Network: `net_rx_bytes_sec`, `net_tx_bytes_sec`, `net_connections`
+- Health: `guest_agent_responsive`, `uptime_seconds`, `state`
 
-Implementation is provisioner-specific:
-- libvirt: `virsh domstats`, `virsh domifstat`, guest agent queries
-- Proxmox: `/api2/json/nodes/{node}/qemu/{vmid}/status/current`, PVE firewall stats
+Rate-based fields (IOPS, bytes/sec) are derived from cumulative counters with delta calculation against a previous sample stored in `/var/lib/blockhost/metrics/<name>.json`.
 
-### `blockhost-vm-throttle <vm-name> --cpu <shares> --bandwidth <kbps>`
-Already listed in provisioner manifests but not implemented. Needs:
-- CPU: cgroup quota adjustment (libvirt), Proxmox API resource limits
-- Bandwidth: tc/nftables shaping (libvirt), PVE firewall bandwidth limits
+Fields requiring the guest agent return -1 when the agent is unresponsive. The command never blocks waiting for the agent.
+
+### `blockhost-vm-throttle <vm-name> [options]`
+Options: `--cpu-shares`, `--cpu-quota`, `--bandwidth-in`, `--bandwidth-out`, `--iops-read`, `--iops-write`, `--reset`. Additive — only specified limits change.
+
+## Engine/monitor responsibility split
+
+The current architecture has engines doing double duty: watching chain events AND managing VM lifecycle (GC, suspension, destruction). The long-term plan:
+
+- **Engine**: watches chain, answers questions. Pure chain reader.
+  - "Did a new subscription appear?"
+  - "Is subscription X still active?"
+  - "What's the expiry?"
+- **Monitor**: polls the engine's answers, decides what to do.
+  - "This subscription expired → suspend VM"
+  - "Grace period passed → destroy"
+  - "New subscription → tell provisioner to create"
+
+The GC logic is identical across engines — check expiry, suspend, wait grace period, destroy. Only the "check expiry" part is chain-specific. This migration happens after the monitor is proven stable with metrics collection. Don't absorb responsibilities before the foundation works.
+
+### Subscription liveness predicate
+
+The engine's `is` CLI needs a new predicate: `is active <subscription-id>` — checks whether the subscription backing a VM is still funded/valid. Engine-specific implementation (EVM checks contract storage, OPNet checks contract state, Cardano checks UTXO existence), chain-agnostic question. The monitor calls it without needing to understand chain internals.
+
+This is not yet in `ENGINE_INTERFACE.md` — it will be added when the monitor is ready to consume it.
+
+## Behavioral baselines (future)
+
+Beyond static limit enforcement, the monitor should learn what "normal" looks like per VM:
+
+- **Per-VM behavioral profiles**: learn baseline patterns over the first week. CPU at 80% is abuse for a web server, idle for a build machine.
+- **Temporal correlation**: disk I/O spike + network spike + new outbound connections = probable exfiltration. CPU spike alone = probably a deployment.
+- **Cross-VM correlation**: three VMs from different wallets hitting the same destination simultaneously = botnet. One VM doing it = maybe just a CDN.
+- **Lifecycle awareness**: brand new VM immediately maxing CPU = cryptominer. VM running fine for months suddenly doing it = compromised.
+
+The 15 years of sysadmin experience is really a lookup table of "pattern X in context Y usually means Z." That's buildable. Start with baselines, add correlation rules incrementally.
+
+## Log anomaly detection (future, exploratory)
+
+Train a small language model on what healthy log output looks like. Flag when the live stream diverges from the learned distribution.
+
+- Character-level LSTM or small transformer on tokenized log lines
+- Log vocabulary is tiny (~5,000 tokens) vs natural language
+- A 50MB quantized model doing inference every few seconds is feasible on a host
+- Not classification ("is this line bad?") — anomaly detection on sequences (high perplexity = unexpected)
+- Challenges: host resource budget, baseline contamination, update sensitivity, explainability
+- Must surface *what* about the sequence is anomalous, not just "model flagged this"
+
+Detailed notes in `~/projects/IDEAS.md` under "Log Anomaly Detection."
 
 ## Plan resource profiles
 
@@ -128,11 +161,17 @@ CPU and bandwidth limits should be configurable in the installer wizard with sen
 ## Open questions
 
 - **Language choice**: Python (consistent with installer/common)? Rust (performance for tight polling loops)? Go?
-- **State persistence**: Does the monitor need to remember historical metrics for trend analysis, or is it purely reactive?
+- **State persistence**: Does the monitor need to remember historical metrics for trend analysis, or is it purely reactive? (Leaning yes — baselines need history)
 - **Admin notification mechanism**: Log-only for v1? Webhook? Push to admin panel?
-- **Relationship with engine monitor**: The engine's blockchain monitor and this host monitor both run as daemons. Do they share a process? Communicate? Or completely independent?
 - **systemd integration**: Watchdog timer? Restart policies? Resource limits on the monitor itself (don't let the cop eat all the donuts)?
 
-## First step
+## Build order
 
-**Metrics interface.** Can't enforce what you can't measure. Define the `blockhost-vm-metrics` contract in facts/, implement in both provisioners, measure polling cost. Everything else builds on that data.
+1. ~~**Metrics interface**~~ — DONE. Contract defined, both provisioners implemented.
+2. **Metrics polling loop** — the daemon. Poll all active VMs, store samples, detect basic threshold violations.
+3. **Plan enforcement** — compare metrics against plan limits, trigger throttle on sustained violations.
+4. **Health monitoring** — detect crashed VMs, unresponsive agents, disk full.
+5. **Behavioral baselines** — learn per-VM normals, flag anomalies.
+6. **GC absorption** — take over subscription expiry → suspend → destroy from engines.
+7. **Log consolidation** — structured pipeline.
+8. **Log anomaly model** — exploratory, after everything else is solid.
