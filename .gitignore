@@ -1,7 +1,18 @@
-__pycache__/
-*.pyc
-.env
-node_modules/
+# Binary
+blockhost-monitor
+
+# Build
 build/
 dist/
-*.egg-info/
+
+# Go
+*.test
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Environment
+.env

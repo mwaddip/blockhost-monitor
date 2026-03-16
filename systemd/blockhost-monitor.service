@@ -1,0 +1,33 @@
+[Unit]
+Description=BlockHost VM Monitor
+Documentation=https://github.com/mwaddip/blockhost-monitor
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=blockhost
+Group=blockhost
+ExecStart=/usr/bin/blockhost-monitor --config /etc/blockhost/monitor.yaml
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=blockhost-monitor
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/etc/blockhost
+ReadOnlyPaths=/usr/share/blockhost
+# The monitor spawns provisioner commands (blockhost-vm-metrics) as child
+# processes that inherit this namespace. The provisioner writes delta samples
+# to /var/lib/blockhost/metrics/, so this path must be read-write.
+ReadWritePaths=/var/lib/blockhost
+
+[Install]
+WantedBy=multi-user.target
