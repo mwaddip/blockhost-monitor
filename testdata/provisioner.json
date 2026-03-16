@@ -1,0 +1,31 @@
+{
+  "name": "libvirt",
+  "version": "0.1.0",
+  "display_name": "libvirt (KVM)",
+  "commands": {
+    "create": "blockhost-vm-create",
+    "destroy": "blockhost-vm-destroy",
+    "start": "blockhost-vm-start",
+    "stop": "blockhost-vm-stop",
+    "kill": "blockhost-vm-kill",
+    "status": "blockhost-vm-status",
+    "list": "blockhost-vm-list",
+    "metrics": "blockhost-vm-metrics",
+    "throttle": "blockhost-vm-throttle",
+    "build-template": "blockhost-build-template",
+    "gc": "blockhost-vm-gc",
+    "resume": "blockhost-vm-resume",
+    "update-gecos": "blockhost-vm-update-gecos"
+  },
+  "setup": {
+    "first_boot_hook": "/usr/share/blockhost/provisioner-hooks/first-boot.sh",
+    "detect": "blockhost-provisioner-detect",
+    "wizard_module": "blockhost.provisioner_libvirt.wizard",
+    "finalization_steps": ["libvirt"]
+  },
+  "root_agent_actions": "/usr/share/blockhost/root-agent-actions/libvirt.py",
+  "config_keys": {
+    "session_key": "provisioner_libvirt",
+    "provisioner_config": ["storage_pool"]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "cpu_percent": 45.2,
+  "cpu_count": 2,
+  "memory_used_mb": 1824,
+  "memory_total_mb": 4096,
+  "disk_used_mb": 12400,
+  "disk_total_mb": 51200,
+  "disk_read_iops": 150,
+  "disk_write_iops": 42,
+  "disk_read_bytes_sec": 6291456,
+  "disk_write_bytes_sec": 1048576,
+  "net_rx_bytes_sec": 1048576,
+  "net_tx_bytes_sec": 524288,
+  "net_connections": 847,
+  "guest_agent_responsive": true,
+  "uptime_seconds": 86400,
+  "state": "running"
+}

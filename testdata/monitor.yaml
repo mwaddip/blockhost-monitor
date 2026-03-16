@@ -1,0 +1,13 @@
+polling:
+  budget_ms: 500
+  min_interval_ms: 2000
+  max_interval_ms: 30000
+
+paths:
+  provisioner_manifest: testdata/provisioner.json
+  db_config: testdata/db.yaml
+  plans_config: testdata/plans.yaml
+
+log:
+  level: info
+  format: text
