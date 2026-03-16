@@ -1,5 +1,5 @@
 [Unit]
-Description=BlockHost VM Monitor
+Description=BlockHost Watchdog
 Documentation=https://github.com/mwaddip/blockhost-monitor
 After=network.target
 Wants=network.target
@@ -8,14 +8,14 @@ Wants=network.target
 Type=simple
 User=blockhost
 Group=blockhost
-ExecStart=/usr/bin/blockhost-monitor --config /etc/blockhost/monitor.yaml
+ExecStart=/usr/bin/blockhost-watchdog --config /etc/blockhost/monitor.yaml
 Restart=always
 RestartSec=10
 
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=blockhost-monitor
+SyslogIdentifier=blockhost-watchdog
 
 # Security hardening
 NoNewPrivileges=yes

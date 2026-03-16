@@ -80,7 +80,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	log.Info("starting blockhost-monitor",
+	log.Info("starting blockhost-watchdog",
 		"provisioner", manifest.Name,
 		"budget_ms", cfg.Polling.BudgetMs,
 		"min_interval_ms", cfg.Polling.MinIntervalMs,
@@ -91,7 +91,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info("blockhost-monitor stopped")
+	log.Info("blockhost-watchdog stopped")
 }
 
 func setupLogger(cfg config.LogConfig) *slog.Logger {
