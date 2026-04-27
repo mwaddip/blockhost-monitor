@@ -37,29 +37,14 @@ func (s *Store) Latest(vmName string) *Sample {
 	return s.latest[vmName]
 }
 
-func (s *Store) LatestAll() map[string]*Sample {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	cp := make(map[string]*Sample, len(s.latest))
-	for k, v := range s.latest {
-		cp[k] = v
+// Prune removes any stored samples whose VM name is not in the active set.
+// Called once per poll cycle so deleted VMs don't linger in the store.
+func (s *Store) Prune(active map[string]struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for name := range s.latest {
+		if _, ok := active[name]; !ok {
+			delete(s.latest, name)
+		}
 	}
-	return cp
-}
-
-// AvgPollDuration returns the average collection duration across all VMs'
-// latest samples. Intended for future adaptive scheduling — not yet wired
-// into the poller. Stale entries for removed VMs will skew the average;
-// eviction will be added when this is consumed.
-func (s *Store) AvgPollDuration() time.Duration {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if len(s.latest) == 0 {
-		return 0
-	}
-	var total time.Duration
-	for _, sample := range s.latest {
-		total += sample.Duration
-	}
-	return total / time.Duration(len(s.latest))
 }

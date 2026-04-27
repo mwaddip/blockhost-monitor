@@ -29,9 +29,6 @@ cp "$SCRIPT_DIR/systemd/blockhost-watchdog.service" \
 cp "$SCRIPT_DIR/config/monitor.yaml" \
     "$BUILD_DIR/etc/blockhost/monitor.yaml"
 
-cp "$SCRIPT_DIR/config/plans.yaml" \
-    "$BUILD_DIR/etc/blockhost/plans.yaml"
-
 # --- DEBIAN/control ---
 cat > "$BUILD_DIR/DEBIAN/control" << EOF
 Package: ${PACKAGE}
@@ -50,7 +47,6 @@ EOF
 # --- DEBIAN/conffiles ---
 cat > "$BUILD_DIR/DEBIAN/conffiles" << 'EOF'
 /etc/blockhost/monitor.yaml
-/etc/blockhost/plans.yaml
 EOF
 
 # --- DEBIAN/postinst ---
@@ -62,12 +58,10 @@ case "$1" in
     configure)
         # Config file permissions (blockhost user/group created by blockhost-common)
         if getent group blockhost > /dev/null 2>&1; then
-            for conf in /etc/blockhost/monitor.yaml /etc/blockhost/plans.yaml; do
-                if [ -f "$conf" ]; then
-                    chown root:blockhost "$conf"
-                    chmod 640 "$conf"
-                fi
-            done
+            if [ -f /etc/blockhost/monitor.yaml ]; then
+                chown root:blockhost /etc/blockhost/monitor.yaml
+                chmod 640 /etc/blockhost/monitor.yaml
+            fi
         fi
 
         systemctl daemon-reload
@@ -112,7 +106,6 @@ case "$1" in
     purge)
         systemctl daemon-reload
         rm -f /etc/blockhost/monitor.yaml
-        rm -f /etc/blockhost/plans.yaml
         ;;
 esac
 

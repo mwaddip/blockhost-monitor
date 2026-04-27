@@ -1,12 +1,10 @@
 polling:
   budget_ms: 500
   min_interval_ms: 2000
-  max_interval_ms: 30000
 
 paths:
   provisioner_manifest: /usr/share/blockhost/provisioner.json
   db_config: /etc/blockhost/db.yaml
-  plans_config: /etc/blockhost/plans.yaml
 
 log:
   level: info

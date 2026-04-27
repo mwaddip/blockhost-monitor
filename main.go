@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -55,7 +56,7 @@ func main() {
 		if err != nil {
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
-				return nil, fmt.Errorf("%w: %s", err, exitErr.Stderr)
+				return nil, fmt.Errorf("%w: stderr=%s", err, bytes.TrimSpace(exitErr.Stderr))
 			}
 			return nil, err
 		}
@@ -77,7 +78,7 @@ func main() {
 		Log:         log,
 	})
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 
 	log.Info("starting blockhost-watchdog",

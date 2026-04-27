@@ -51,7 +51,9 @@ func New(command string, run RunFunc) *Collector {
 }
 
 // Collect runs the metrics command for vmName and returns parsed metrics,
-// the wall-clock duration of the collection, and any error.
+// the wall-clock duration of the collection, and any error. The duration
+// is recorded for both successful and failed collections so callers can
+// observe slow-and-failing VMs (relevant for noisy-neighbor detection).
 func (c *Collector) Collect(ctx context.Context, vmName string) (*Metrics, time.Duration, error) {
 	start := time.Now()
 	out, err := c.run(ctx, c.command, vmName)

@@ -35,36 +35,32 @@ func TestStore_LatestMissing(t *testing.T) {
 	}
 }
 
-func TestStore_LatestAll(t *testing.T) {
+func TestStore_Prune(t *testing.T) {
 	s := NewStore()
 	now := time.Now()
+	s.Record(&Sample{VMName: "web1", Metrics: &collector.Metrics{}, Timestamp: now, Duration: time.Millisecond})
+	s.Record(&Sample{VMName: "db1", Metrics: &collector.Metrics{}, Timestamp: now, Duration: time.Millisecond})
+	s.Record(&Sample{VMName: "old1", Metrics: &collector.Metrics{}, Timestamp: now, Duration: time.Millisecond})
 
-	s.Record(&Sample{VMName: "web1", Metrics: &collector.Metrics{CPUPercent: 10}, Timestamp: now, Duration: time.Millisecond})
-	s.Record(&Sample{VMName: "db1", Metrics: &collector.Metrics{CPUPercent: 20}, Timestamp: now, Duration: time.Millisecond})
+	s.Prune(map[string]struct{}{"web1": {}, "db1": {}})
 
-	all := s.LatestAll()
-	if len(all) != 2 {
-		t.Fatalf("got %d entries, want 2", len(all))
+	if s.Latest("web1") == nil {
+		t.Error("web1 should be retained")
+	}
+	if s.Latest("db1") == nil {
+		t.Error("db1 should be retained")
+	}
+	if s.Latest("old1") != nil {
+		t.Error("old1 should have been pruned")
 	}
 }
 
-func TestStore_AvgPollDuration(t *testing.T) {
+func TestStore_PruneAll(t *testing.T) {
 	s := NewStore()
-	now := time.Now()
-
-	s.Record(&Sample{VMName: "web1", Metrics: &collector.Metrics{}, Timestamp: now, Duration: 40 * time.Millisecond})
-	s.Record(&Sample{VMName: "db1", Metrics: &collector.Metrics{}, Timestamp: now, Duration: 60 * time.Millisecond})
-
-	avg := s.AvgPollDuration()
-	if avg != 50*time.Millisecond {
-		t.Errorf("avg = %v, want 50ms", avg)
-	}
-}
-
-func TestStore_AvgPollDuration_Empty(t *testing.T) {
-	s := NewStore()
-	if s.AvgPollDuration() != 0 {
-		t.Error("expected 0 for empty store")
+	s.Record(&Sample{VMName: "web1", Metrics: &collector.Metrics{}, Timestamp: time.Now(), Duration: time.Millisecond})
+	s.Prune(map[string]struct{}{})
+	if s.Latest("web1") != nil {
+		t.Error("expected web1 to be pruned with empty active set")
 	}
 }
 
@@ -92,8 +88,6 @@ func TestStore_ConcurrentAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			s.Latest("vm-0")
-			s.LatestAll()
-			s.AvgPollDuration()
 		}()
 	}
 

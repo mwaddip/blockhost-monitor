@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"testing"
 )
 
@@ -15,9 +16,6 @@ func TestLoadMonitorConfig(t *testing.T) {
 	}
 	if cfg.Polling.MinIntervalMs != 2000 {
 		t.Errorf("min_interval_ms = %d, want 2000", cfg.Polling.MinIntervalMs)
-	}
-	if cfg.Polling.MaxIntervalMs != 30000 {
-		t.Errorf("max_interval_ms = %d, want 30000", cfg.Polling.MaxIntervalMs)
 	}
 	if cfg.Log.Level != "info" {
 		t.Errorf("log level = %q, want %q", cfg.Log.Level, "info")
@@ -34,31 +32,6 @@ func TestLoadMonitorConfig_FileNotFound(t *testing.T) {
 	}
 }
 
-func TestLoadPlansConfig(t *testing.T) {
-	cfg, err := LoadPlansConfig("../../testdata/plans.yaml")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(cfg.Plans) != 2 {
-		t.Fatalf("got %d plans, want 2", len(cfg.Plans))
-	}
-
-	basic := cfg.Plans[1]
-	if basic.Name != "Basic VM" {
-		t.Errorf("plan 1 name = %q, want %q", basic.Name, "Basic VM")
-	}
-	if basic.CPUCores != 2 {
-		t.Errorf("plan 1 cpu_cores = %d, want 2", basic.CPUCores)
-	}
-	if basic.Burst == nil {
-		t.Fatal("plan 1 burst is nil")
-	}
-	if basic.Burst.CPUCores != 4 {
-		t.Errorf("plan 1 burst cpu_cores = %d, want 4", basic.Burst.CPUCores)
-	}
-}
-
 func TestLoadDbConfig(t *testing.T) {
 	cfg, err := LoadDbConfig("../../testdata/db.yaml")
 	if err != nil {
@@ -66,5 +39,53 @@ func TestLoadDbConfig(t *testing.T) {
 	}
 	if cfg.DbFile != "testdata/vms.json" {
 		t.Errorf("db_file = %q, want %q", cfg.DbFile, "testdata/vms.json")
+	}
+}
+
+func TestMonitorConfig_Validate(t *testing.T) {
+	good := func() MonitorConfig {
+		return MonitorConfig{
+			Polling: PollingConfig{BudgetMs: 500, MinIntervalMs: 2000},
+			Paths:   PathsConfig{ProvisionerManifest: "p", DbConfig: "d"},
+		}
+	}
+
+	cases := []struct {
+		name    string
+		mutate  func(*MonitorConfig)
+		wantErr bool
+	}{
+		{"valid", func(c *MonitorConfig) {}, false},
+		{"zero budget", func(c *MonitorConfig) { c.Polling.BudgetMs = 0 }, true},
+		{"negative budget", func(c *MonitorConfig) { c.Polling.BudgetMs = -1 }, true},
+		{"zero min interval", func(c *MonitorConfig) { c.Polling.MinIntervalMs = 0 }, true},
+		{"negative min interval", func(c *MonitorConfig) { c.Polling.MinIntervalMs = -1 }, true},
+		{"empty manifest path", func(c *MonitorConfig) { c.Paths.ProvisionerManifest = "" }, true},
+		{"empty db config path", func(c *MonitorConfig) { c.Paths.DbConfig = "" }, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := good()
+			tc.mutate(&cfg)
+			err := cfg.Validate()
+			if tc.wantErr && err == nil {
+				t.Error("expected error, got nil")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestLoadDbConfig_EmptyDbFile(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/empty.yaml"
+	if err := os.WriteFile(path, []byte("db_file: \"\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadDbConfig(path); err == nil {
+		t.Fatal("expected error for empty db_file")
 	}
 }

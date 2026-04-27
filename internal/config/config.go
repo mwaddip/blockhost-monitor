@@ -16,13 +16,11 @@ type MonitorConfig struct {
 type PollingConfig struct {
 	BudgetMs      int `yaml:"budget_ms"`
 	MinIntervalMs int `yaml:"min_interval_ms"`
-	MaxIntervalMs int `yaml:"max_interval_ms"`
 }
 
 type PathsConfig struct {
 	ProvisionerManifest string `yaml:"provisioner_manifest"`
 	DbConfig            string `yaml:"db_config"`
-	PlansConfig         string `yaml:"plans_config"`
 }
 
 type LogConfig struct {
@@ -39,38 +37,26 @@ func LoadMonitorConfig(path string) (*MonitorConfig, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse monitor config: %w", err)
 	}
-	return &cfg, nil
-}
-
-type PlansConfig struct {
-	Plans map[int]PlanProfile `yaml:"plans"`
-}
-
-type PlanProfile struct {
-	Name          string       `yaml:"name"`
-	CPUCores      int          `yaml:"cpu_cores"`
-	MemoryMB      int          `yaml:"memory_mb"`
-	DiskMB        int          `yaml:"disk_mb"`
-	BandwidthMbps int          `yaml:"bandwidth_mbps"`
-	IOPSLimit     int          `yaml:"iops_limit"`
-	Burst         *BurstConfig `yaml:"burst"`
-}
-
-type BurstConfig struct {
-	CPUCores    int `yaml:"cpu_cores"`
-	DurationSec int `yaml:"duration_sec"`
-}
-
-func LoadPlansConfig(path string) (*PlansConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read plans config: %w", err)
-	}
-	var cfg PlansConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse plans config: %w", err)
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("monitor config: %w", err)
 	}
 	return &cfg, nil
+}
+
+func (c *MonitorConfig) Validate() error {
+	if c.Polling.BudgetMs <= 0 {
+		return fmt.Errorf("polling.budget_ms must be > 0, got %d", c.Polling.BudgetMs)
+	}
+	if c.Polling.MinIntervalMs <= 0 {
+		return fmt.Errorf("polling.min_interval_ms must be > 0, got %d", c.Polling.MinIntervalMs)
+	}
+	if c.Paths.ProvisionerManifest == "" {
+		return fmt.Errorf("paths.provisioner_manifest must be set")
+	}
+	if c.Paths.DbConfig == "" {
+		return fmt.Errorf("paths.db_config must be set")
+	}
+	return nil
 }
 
 // DbConfig captures the subset of db.yaml the monitor needs.
@@ -87,6 +73,9 @@ func LoadDbConfig(path string) (*DbConfig, error) {
 	var cfg DbConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse db config: %w", err)
+	}
+	if cfg.DbFile == "" {
+		return nil, fmt.Errorf("db config: db_file must be set")
 	}
 	return &cfg, nil
 }

@@ -8,8 +8,6 @@ import (
 
 type VM struct {
 	Name          string  `json:"vm_name"`
-	// VMID is int for Proxmox, string (domain name) for libvirt.
-	VMID          any     `json:"vmid"`
 	IPAddress     string  `json:"ip_address"`
 	Status        string  `json:"status"`
 	Owner         string  `json:"owner"`
